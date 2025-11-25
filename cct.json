@@ -1,0 +1,24 @@
+{
+  "claves_validas": [
+    {
+      "cct": "14DPR2576Y",
+      "nombre": "Instituto Ejemplo 1",
+      "activo": true
+    },
+    {
+      "cct": "14EPR0494Z",
+      "nombre": "Instituto Ejemplo 2",
+      "activo": true
+    },
+    {
+      "cct": "14PES0471O",
+      "nombre": "Instituto Ejemplo 3",
+      "activo": true
+    },
+    {
+      "cct": "14PPR1613J",
+      "nombre": "Instituto Ejemplo 4",
+      "activo": true
+    }
+  ]
+}

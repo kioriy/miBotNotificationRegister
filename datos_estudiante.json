@@ -1,0 +1,82 @@
+{
+  "14DPR2576Y": {
+    "campos_estudiante": [
+      {
+        "campo": "domicilio",
+        "tipo": "texto",
+        "pregunta": "📍 Ingresa el domicilio del estudiante:",
+        "obligatorio": true
+      },
+      {
+        "campo": "tipo_sangre",
+        "tipo": "opcion_multiple",
+        "pregunta": "🩸 Selecciona el tipo de sangre del estudiante:",
+        "opciones": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "NO LO SÉ"],
+        "obligatorio": true
+      },
+      {
+        "campo": "alergias",
+        "tipo": "texto",
+        "pregunta": "🤧 ¿El estudiante tiene alergias? (escribe 'ninguna' si no tiene):",
+        "obligatorio": true
+      },
+      {
+        "campo": "medicamentos",
+        "tipo": "texto",
+        "pregunta": "💊 ¿El estudiante toma algún medicamento? (escribe 'ninguno' si no toma):",
+        "obligatorio": true
+      },
+      {
+        "campo": "foto",
+        "tipo": "foto",
+        "pregunta": "📸 Envía la foto del estudiante (formato JPG o PNG):",
+        "obligatorio": true
+      }
+    ],
+    "campos_autorizado": [
+      {
+        "campo": "telefono",
+        "tipo": "telefono",
+        "pregunta": "📱 Ingresa el teléfono del autorizado (10 dígitos):",
+        "obligatorio": true
+      },
+      {
+        "campo": "foto",
+        "tipo": "foto",
+        "pregunta": "📸 Envía la foto del autorizado (formato JPG o PNG):",
+        "obligatorio": true
+      }
+    ]
+  },
+  "14EPR0494Z": {
+    "campos_estudiante": [
+      {
+        "campo": "tipo_sangre",
+        "tipo": "opcion_multiple",
+        "pregunta": "🩸 Selecciona el tipo de sangre del estudiante:",
+        "opciones": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "NO LO SÉ"],
+        "obligatorio": true
+      },
+      {
+        "campo": "foto",
+        "tipo": "foto",
+        "pregunta": "📸 Envía la foto del estudiante (formato JPG o PNG):",
+        "obligatorio": true
+      }
+    ],
+    "campos_autorizado": [
+      {
+        "campo": "telefono",
+        "tipo": "telefono",
+        "pregunta": "📱 Ingresa el teléfono del autorizado (10 dígitos):",
+        "obligatorio": true
+      },
+      {
+        "campo": "foto",
+        "tipo": "foto",
+        "pregunta": "📸 Envía la foto del autorizado (formato JPG o PNG):",
+        "obligatorio": true
+      }
+    ]
+  }
+}
