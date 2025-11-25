@@ -1232,7 +1232,40 @@ async def view_students(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             message_text += f"*👨‍🎓 Estudiante #{i}:*\n"
             message_text += f"🏫 Instituto: {student['clave_instituto']}\n"
             message_text += f"📝 Nombre: {student['nombre_estudiante']} {student['apellidos_estudiante']}\n"
-            message_text += f"👤 Autorizado: {student['nombre_autorizado']} {student['apellidos_autorizado']}\n"
+
+            # Mostrar nuevos campos básicos
+            if student.get('nivel_escolar'):
+                message_text += f"📊 Nivel: {student['nivel_escolar'].capitalize()}\n"
+            if student.get('grado'):
+                message_text += f"📚 Grado: {student['grado']}\n"
+            if student.get('grupo'):
+                message_text += f"🎯 Grupo: {student['grupo']}\n"
+
+            # Mostrar datos adicionales del estudiante
+            datos_est = student.get('datos_estudiante', {})
+            if datos_est and isinstance(datos_est, dict):
+                if datos_est.get('domicilio'):
+                    message_text += f"📍 Domicilio: {datos_est['domicilio']}\n"
+                if datos_est.get('tipo_sangre'):
+                    message_text += f"🩸 Tipo de sangre: {datos_est['tipo_sangre']}\n"
+                if datos_est.get('alergias'):
+                    message_text += f"🤧 Alergias: {datos_est['alergias']}\n"
+                if datos_est.get('medicamentos'):
+                    message_text += f"💊 Medicamentos: {datos_est['medicamentos']}\n"
+                if datos_est.get('foto'):
+                    message_text += f"📸 Foto estudiante: ✅ Guardada\n"
+
+            message_text += f"\n*👤 Autorizado:*\n"
+            message_text += f"📝 Nombre: {student['nombre_autorizado']} {student['apellidos_autorizado']}\n"
+
+            # Mostrar datos adicionales del autorizado
+            datos_aut = student.get('datos_autorizado', {})
+            if datos_aut and isinstance(datos_aut, dict):
+                if datos_aut.get('telefono'):
+                    message_text += f"📱 Teléfono: {datos_aut['telefono']}\n"
+                if datos_aut.get('foto'):
+                    message_text += f"📸 Foto autorizado: ✅ Guardada\n"
+
             message_text += f"📅 Registrado: {student['created_at']}\n"
             if i < len(students):
                 message_text += "\n" + "─" * 30 + "\n\n"
@@ -1331,18 +1364,23 @@ async def edit_student_select(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Crear menú de campos para editar
         keyboard = [
-            [InlineKeyboardButton("🏫 Clave Instituto", callback_data=f"edit_field_clave_instituto_{student_id}")],
-            [InlineKeyboardButton("👨‍🎓 Apellidos Estudiante", callback_data=f"edit_field_apellidos_estudiante_{student_id}")],
+            [InlineKeyboardButton("🏫 Clave Instituto", callback_data=f"edit_field_clave_instituto_estudiante_{student_id}")],
             [InlineKeyboardButton("👨‍🎓 Nombre Estudiante", callback_data=f"edit_field_nombre_estudiante_{student_id}")],
-            [InlineKeyboardButton("👤 Apellidos Autorizado", callback_data=f"edit_field_apellidos_autorizado_{student_id}")],
-            [InlineKeyboardButton("👤 Nombre Autorizado", callback_data=f"edit_field_nombre_autorizado_{student_id}")],
+            [InlineKeyboardButton("👨‍🎓 Apellidos Estudiante", callback_data=f"edit_field_apellidos_estudiante_{student_id}")],
+            [InlineKeyboardButton("📊 Nivel Escolar", callback_data=f"edit_field_nivel_escolar_estudiante_{student_id}")],
+            [InlineKeyboardButton("📚 Grado", callback_data=f"edit_field_grado_estudiante_{student_id}")],
+            [InlineKeyboardButton("🎯 Grupo", callback_data=f"edit_field_grupo_estudiante_{student_id}")],
+            [InlineKeyboardButton("👤 Nombre Autorizado", callback_data=f"edit_field_nombre_autorizado_autorizado_{student_id}")],
+            [InlineKeyboardButton("👤 Apellidos Autorizado", callback_data=f"edit_field_apellidos_autorizado_autorizado_{student_id}")],
             [InlineKeyboardButton("🔙 Volver a selección", callback_data="edit_menu")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         message_text = f"✏️ *Editar Estudiante*\n\n"
         message_text += f"👨‍🎓 **{student['nombre_estudiante']} {student['apellidos_estudiante']}**\n"
         message_text += f"🏫 Instituto: {student['clave_instituto']}\n"
+        if student.get('nivel_escolar'):
+            message_text += f"📊 Nivel: {student['nivel_escolar'].capitalize()}, Grado: {student.get('grado', 'N/A')}, Grupo: {student.get('grupo', 'N/A')}\n"
         message_text += f"👤 Autorizado: {student['nombre_autorizado']} {student['apellidos_autorizado']}\n\n"
         message_text += "Selecciona el campo que deseas modificar:"
         
@@ -1365,26 +1403,32 @@ async def edit_field_select(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             logger.error(f"Error answering callback query: {e}")
     
     # Extraer información del callback_data
+    # Formato: edit_field_{nombre_campo}_{tipo}_{student_id}
     if query.data.startswith("edit_field_"):
         parts = query.data.split("_")
-        field_name = parts[2]  # clave_instituto, apellidos_estudiante, etc.
+        field_name = parts[2]  # nombre, apellidos, clave, nivel, grado, grupo
+        field_type = parts[3]  # estudiante o autorizado
         student_id = int(parts[4])
-        
+
         # Mapear nombres de campos a nombres legibles
         field_map = {
-            'clave_instituto': 'Clave del Instituto',
-            'apellidos_estudiante': 'Apellidos del Estudiante',
-            'nombre_estudiante': 'Nombre del Estudiante',
-            'apellidos_autorizado': 'Apellidos del Autorizado',
-            'nombre_autorizado': 'Nombre del Autorizado',
+            'clave': 'Clave del Instituto',
+            'apellidos': 'Apellidos',
+            'nombre': 'Nombre',
+            'nivel': 'Nivel Escolar',
+            'grado': 'Grado',
+            'grupo': 'Grupo',
         }
-        
+
         readable_name = field_map.get(field_name, field_name)
+        type_readable = "del Estudiante" if field_type == "estudiante" else "del Autorizado"
+
         context.user_data['edit_field'] = field_name
+        context.user_data['edit_field_type'] = field_type
         context.user_data['edit_student_id'] = student_id
-        
+
         await query.edit_message_text(
-            f"✏️ *Editar {readable_name}*\n\n"
+            f"✏️ *Editar {readable_name} {type_readable}*\n\n"
             f"Por favor, ingresa el nuevo valor para *{readable_name}*:\n\n"
             f"Escribe /cancel para cancelar.",
             parse_mode='Markdown'
@@ -1398,15 +1442,25 @@ async def edit_value_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Recibe el nuevo valor y actualiza la base de datos"""
     new_value = update.message.text
     field = context.user_data.get('edit_field')
+    field_type = context.user_data.get('edit_field_type')
     student_id = context.user_data.get('edit_student_id')
     telegram_id = update.effective_user.id
-    
+
     updated = False
-    if field:
-        if field in ("apellidos_autorizado", "nombre_autorizado"):
-            updated = db.update_user(telegram_id, field, new_value)
-        elif student_id:
-            updated = db.update_student(telegram_id, f"{field}_estudiante", new_value, student_id)
+    if field and field_type:
+        if field_type == "autorizado":
+            # Campos del autorizado
+            field_full = f"{field}_autorizado"
+            updated = db.update_user(telegram_id, field_full, new_value)
+        elif field_type == "estudiante" and student_id:
+            # Campos del estudiante
+            if field == "clave":
+                field_full = "clave_instituto"
+            elif field == "nivel":
+                field_full = "nivel_escolar"
+            else:
+                field_full = f"{field}_estudiante" if field in ["nombre", "apellidos"] else field
+            updated = db.update_student(telegram_id, field_full, new_value, student_id)
     if updated:
         # Obtener datos actualizados del estudiante
         student = db.get_student(telegram_id, student_id)
@@ -1422,6 +1476,8 @@ async def edit_value_receive(update: Update, context: ContextTypes.DEFAULT_TYPE)
         message_text = "✅ *¡Datos actualizados correctamente!*\n\n"
         message_text += f"👨‍🎓 **{student['nombre_estudiante']} {student['apellidos_estudiante']}**\n"
         message_text += f"🏫 Instituto: {student['clave_instituto']}\n"
+        if student.get('nivel_escolar'):
+            message_text += f"📊 Nivel: {student['nivel_escolar'].capitalize()}, Grado: {student.get('grado', 'N/A')}, Grupo: {student.get('grupo', 'N/A')}\n"
         message_text += f"👤 Autorizado: {student['nombre_autorizado']} {student['apellidos_autorizado']}"
         
         await update.message.reply_text(
