@@ -9,14 +9,33 @@ Este es un bot de Telegram para la gestión de registro de estudiantes construid
 ## Ejecutar el Bot
 
 ```bash
-# Activar entorno virtual
-source .venv/bin/activate  # macOS/Linux
-# o
-.venv\Scripts\activate  # Windows
+# Con uv (recomendado)
+uv run python bot.py
 
-# Ejecutar el bot
+# O activando el entorno virtual manualmente
+source .venv/bin/activate  # macOS/Linux
 python bot.py
 ```
+
+## Gestión de Dependencias
+
+Este proyecto usa **uv** como gestor de paquetes moderno:
+
+```bash
+# Instalar/actualizar dependencias
+uv sync
+
+# Agregar nueva dependencia
+uv add nombre-paquete
+
+# Agregar dependencia de desarrollo
+uv add --dev nombre-paquete
+
+# Actualizar dependencias
+uv lock --upgrade
+```
+
+Las dependencias están definidas en `pyproject.toml` (moderno, PEP 621) y se mantiene `requirements.txt` para compatibilidad.
 
 El bot utiliza un mecanismo de bloqueo basado en archivos para prevenir que múltiples instancias se ejecuten simultáneamente (ver bot.py:1073-1080).
 

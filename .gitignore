@@ -106,7 +106,7 @@ celerybeat.pid
 Pipfile.lock
 poetry.lock
 pdm.lock
-uv.lock
+# uv.lock debe estar en git para builds reproducibles
 
 # Archivos temporales de sistema
 .DS_Store

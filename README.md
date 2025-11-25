@@ -27,25 +27,34 @@ Bot de Telegram que permite registrar estudiantes con sus datos personales y del
 ### 1. Clonar o descargar el proyecto
 
 ```bash
+git clone https://github.com/kioriy/miBotNotificationRegister.git
 cd miBotNotificationRegister
 ```
 
-### 2. Crear entorno virtual con uv (recomendado)
+### 2. Instalar dependencias con uv (recomendado)
 
 ```bash
-uv venv
-source botRegister/bin/activate  # En Linux/Mac
-# o
-botRegister\Scripts\activate  # En Windows
+# Instalar uv si no lo tienes
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Crear entorno virtual e instalar dependencias
+uv sync
 ```
 
-### 3. Instalar dependencias
+**Método alternativo con pip:**
 
 ```bash
+# Crear entorno virtual
+python -m venv .venv
+source .venv/bin/activate  # En Linux/Mac
+# o
+.venv\Scripts\activate  # En Windows
+
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-### 4. Configurar el token del bot
+### 3. Configurar el token del bot
 
 Crea un archivo `.env` en la raíz del proyecto:
 
@@ -70,6 +79,11 @@ Para obtener un token:
 ### Iniciar el bot
 
 ```bash
+# Con uv (recomendado)
+uv run python bot.py
+
+# O activando el entorno virtual
+source .venv/bin/activate  # Linux/Mac
 python bot.py
 ```
 
@@ -112,10 +126,13 @@ miBotNotificationRegister/
 ├── bot.py              # Código principal del bot
 ├── database.py         # Gestión de base de datos SQLite
 ├── migrate_db.py       # Script de migración de base de datos
-├── requirements.txt    # Dependencias del proyecto
+├── pyproject.toml      # Configuración del proyecto y dependencias
+├── uv.lock            # Lock file de dependencias (uv)
+├── requirements.txt    # Dependencias (compatibilidad)
 ├── .env               # Configuración (token del bot)
 ├── .env.example       # Ejemplo de configuración
 ├── .gitignore         # Archivos ignorados por git
+├── CLAUDE.md          # Documentación para Claude Code
 ├── README.md          # Este archivo
 └── students.db        # Base de datos (se crea automáticamente)
 ```
@@ -137,9 +154,10 @@ El bot utiliza SQLite con la siguiente estructura:
 
 ## 🛠️ Tecnologías utilizadas
 
-- **python-telegram-bot** (v20.7) - Framework para bots de Telegram
+- **python-telegram-bot** (v21.10) - Framework para bots de Telegram
 - **python-dotenv** (v1.0.0) - Gestión de variables de entorno
 - **SQLite3** - Base de datos (incluido en Python)
+- **uv** - Gestor de paquetes y entornos virtuales moderno
 
 ## 📝 Notas
 
