@@ -4,10 +4,13 @@
 # @Last Modified by:   Hugo Rafael Hernández Llamas
 # @Last Modified time: 2025-10-01 09:05:09
 import os
+import json
 import logging
 import atexit
 import tempfile
-from typing import Dict
+import re
+from pathlib import Path
+from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -36,8 +39,113 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 # Inicializar base de datos
 db = Database()
 
+
+# ============================================================================
+# FUNCIONES HELPER
+# ============================================================================
+
+def load_cct_data() -> Dict:
+    """Carga el archivo cct.json con las claves válidas"""
+    try:
+        with open('cct.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.error("Archivo cct.json no encontrado")
+        return {"claves_validas": []}
+    except json.JSONDecodeError as e:
+        logger.error(f"Error al parsear cct.json: {e}")
+        return {"claves_validas": []}
+
+
+def load_datos_estudiante() -> Dict:
+    """Carga el archivo datos_estudiante.json con configuraciones de flujos"""
+    try:
+        with open('datos_estudiante.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.error("Archivo datos_estudiante.json no encontrado")
+        return {}
+    except json.JSONDecodeError as e:
+        logger.error(f"Error al parsear datos_estudiante.json: {e}")
+        return {}
+
+
+def validate_cct(cct: str) -> bool:
+    """Valida si una CCT existe en el catálogo"""
+    cct_data = load_cct_data()
+    claves_validas = [item['cct'] for item in cct_data.get('claves_validas', [])]
+    return cct.upper() in claves_validas
+
+
+def normalize_filename(name: str) -> str:
+    """Normaliza un nombre para usarlo como nombre de archivo"""
+    # Eliminar acentos y caracteres especiales
+    name = name.lower().strip()
+    replacements = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'ñ': 'n', 'ü': 'u', ' ': '_'
+    }
+    for old, new in replacements.items():
+        name = name.replace(old, new)
+    # Mantener solo letras, números y guiones bajos
+    name = re.sub(r'[^a-z0-9_]', '', name)
+    return name
+
+
+async def save_photo(photo_file, cct: str, tipo: str, nombre: str) -> Optional[str]:
+    """
+    Guarda una foto en el sistema de archivos
+
+    Args:
+        photo_file: Archivo de foto de Telegram
+        cct: Clave del centro de trabajo
+        tipo: 'alumnos' o 'autorizados'
+        nombre: Nombre completo para el archivo
+
+    Returns:
+        Ruta relativa del archivo guardado o None si hay error
+    """
+    try:
+        # Crear directorio si no existe
+        foto_dir = Path(f"fotos/{cct}/{tipo}")
+        foto_dir.mkdir(parents=True, exist_ok=True)
+
+        # Normalizar nombre para archivo
+        nombre_archivo = normalize_filename(nombre)
+        foto_path = foto_dir / f"{nombre_archivo}.jpg"
+
+        # Descargar y guardar foto
+        await photo_file.download_to_drive(str(foto_path))
+
+        logger.info(f"Foto guardada en: {foto_path}")
+        return str(foto_path)
+    except Exception as e:
+        logger.error(f"Error al guardar foto: {e}")
+        return None
+
+
+def get_grados_por_nivel(nivel: str) -> List[str]:
+    """Retorna los grados disponibles según el nivel escolar"""
+    grados_map = {
+        'maternal': ['1', '2', '3'],
+        'preescolar': ['1', '2', '3'],
+        'primaria': ['1', '2', '3', '4', '5', '6'],
+        'secundaria': ['1', '2', '3'],
+        'bachillerato': ['1', '2', '3'],
+        'universidad': ['1', '2', '3', '4', '5', '6', '7', '8']
+    }
+    return grados_map.get(nivel.lower(), ['1', '2', '3', '4', '5', '6'])
+
+
+# ============================================================================
+# ESTADOS PARA CONVERSATIONHANDLER
+# ============================================================================
+
 # Estados para el ConversationHandler de registro
-CLAVE_INSTITUTO, APELLIDOS_ESTUDIANTE, NOMBRE_ESTUDIANTE, APELLIDOS_AUTORIZADO, NOMBRE_AUTORIZADO = range(5)
+(CLAVE_INSTITUTO, NOMBRE_ESTUDIANTE, APELLIDOS_ESTUDIANTE,
+ NIVEL_ESCOLAR, GRADO, GRUPO,
+ DATOS_DINAMICOS_ESTUDIANTE, NOMBRE_AUTORIZADO, APELLIDOS_AUTORIZADO,
+ DATOS_DINAMICOS_AUTORIZADO) = range(10)
 
 # Estados para el ConversationHandler de nuevo estudiante
 NEW_CLAVE_INSTITUTO, NEW_APELLIDOS_ESTUDIANTE, NEW_NOMBRE_ESTUDIANTE = range(5, 8)
@@ -482,27 +590,63 @@ async def register_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data.clear()
     # Marcar que el usuario está en proceso de registro
     context.user_data['registration_in_progress'] = True
+    context.user_data['datos_estudiante_extra'] = {}
+    context.user_data['datos_autorizado_extra'] = {}
+
+    # Cargar CCTs válidas
+    cct_data = load_cct_data()
+    claves = [item['cct'] for item in cct_data.get('claves_validas', [])]
 
     await query.edit_message_text(
         "📝 *Proceso de Registro*\n\n"
-        "📝 **Paso 1 de 5**\n"
-        "Por favor, ingresa la *clave del instituto*:\n\n"
-        "💡 *Ejemplo:* `14PPR0000X`\n"
-        f"🔒 Si no conoces la clave consulta en dirección o adiminstración del instituto.\n"
+        "📝 **Paso 1 de 10**\n"
+        "Por favor, ingresa la *clave del instituto (CCT)*:\n\n"
+        f"💡 *Claves válidas:* {', '.join(claves)}\n"
+        "🔒 Si no conoces la clave consulta en dirección o administración del instituto.\n"
         "🔍 Usa `/miEstado` para ver tu progreso",
         parse_mode='Markdown'
     )
     return CLAVE_INSTITUTO
 
 async def clave_instituto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Recibe la clave del instituto"""
-    context.user_data['clave_instituto'] = update.message.text
-    # Mantener el flag de registro en progreso
+    """Recibe y valida la clave del instituto"""
+    cct = update.message.text.strip().upper()
+
+    # Validar CCT
+    if not validate_cct(cct):
+        cct_data = load_cct_data()
+        claves = [item['cct'] for item in cct_data.get('claves_validas', [])]
+        await update.message.reply_text(
+            f"❌ *CCT no válida*\n\n"
+            f"La clave `{cct}` no está registrada en el sistema.\n\n"
+            f"💡 *Claves válidas:*\n" + "\n".join([f"  • {c}" for c in claves]) + "\n\n"
+            f"Por favor, ingresa una clave válida:",
+            parse_mode='Markdown'
+        )
+        return CLAVE_INSTITUTO
+
+    context.user_data['clave_instituto'] = cct
     context.user_data['registration_in_progress'] = True
-    
+
     await update.message.reply_text(
-        "✅ *Clave del instituto guardada*\n\n"
-        "📝 **Paso 2 de 5**\n"
+        "✅ *CCT válida*\n\n"
+        "📝 **Paso 2 de 10**\n"
+        "Ahora, ingresa el *nombre del estudiante*:\n\n"
+        "💡 *Ejemplo:* `Juan Carlos` o `María Elena`\n"
+        "🔍 Usa `/miEstado` para ver tu progreso",
+        parse_mode='Markdown'
+    )
+    return NOMBRE_ESTUDIANTE
+
+
+async def nombre_estudiante(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Recibe el nombre del estudiante"""
+    context.user_data['nombre_estudiante'] = update.message.text.strip()
+    context.user_data['registration_in_progress'] = True
+
+    await update.message.reply_text(
+        "✅ *Nombre del estudiante guardado*\n\n"
+        "📝 **Paso 3 de 10**\n"
         "Ahora, ingresa los *apellidos del estudiante*:\n\n"
         "💡 *Ejemplo:* `García López` o `Martínez Rodríguez`\n"
         "🔍 Usa `/miEstado` para ver tu progreso",
@@ -512,20 +656,28 @@ async def clave_instituto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def apellidos_estudiante(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Recibe los apellidos del estudiante"""
-    context.user_data['apellidos_estudiante'] = update.message.text
-    # Mantener el flag de registro en progreso
+    """Recibe los apellidos del estudiante y pide nivel escolar"""
+    context.user_data['apellidos_estudiante'] = update.message.text.strip()
     context.user_data['registration_in_progress'] = True
-    
+
+    # Crear opciones de nivel escolar
+    niveles = [
+        ['🍼 Maternal', '🎨 Preescolar'],
+        ['📚 Primaria', '🎓 Secundaria'],
+        ['📖 Bachillerato', '🏛️ Universidad']
+    ]
+    keyboard = [[InlineKeyboardButton(texto, callback_data=f"nivel_{texto.split()[1].lower()}")
+                 for texto in fila] for fila in niveles]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
         "✅ *Apellidos del estudiante guardados*\n\n"
-        "📝 **Paso 3 de 5**\n"
-        "Ahora, ingresa el *nombre del estudiante*:\n\n"
-        "💡 *Ejemplo:* `Juan Carlos` o `María Elena`\n"
-        "🔍 Usa `/miEstado` para ver tu progreso",
+        "📝 **Paso 4 de 10**\n"
+        "Selecciona el *nivel escolar* del estudiante:",
+        reply_markup=reply_markup,
         parse_mode='Markdown'
     )
-    return NOMBRE_ESTUDIANTE
+    return NIVEL_ESCOLAR
 
 
 async def nombre_estudiante(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -597,6 +749,328 @@ async def nombre_autorizado(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             "❌ Hubo un error al guardar tus datos. Por favor, intenta nuevamente."
         )
     
+    # Limpiar datos temporales
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+# ============================================================================
+# NUEVOS HANDLERS PARA FLUJO COMPLETO
+# ============================================================================
+
+async def nivel_escolar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Maneja la selección de nivel escolar y pide grado"""
+    query = update.callback_query
+    await query.answer()
+
+    # Extraer nivel del callback_data
+    nivel = query.data.replace('nivel_', '')
+    context.user_data['nivel_escolar'] = nivel
+
+    # Obtener grados disponibles para el nivel
+    grados = get_grados_por_nivel(nivel)
+
+    # Crear botones de grado (2 por fila)
+    keyboard = []
+    for i in range(0, len(grados), 2):
+        row = [InlineKeyboardButton(f"Grado {g}", callback_data=f"grado_{g}")
+               for g in grados[i:i+2]]
+        keyboard.append(row)
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        f"✅ *Nivel escolar: {nivel.capitalize()}*\n\n"
+        f"📝 **Paso 5 de 10**\n"
+        f"Selecciona el *grado* del estudiante:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+    return GRADO
+
+
+async def grado_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Maneja la selección de grado y pide grupo"""
+    query = update.callback_query
+    await query.answer()
+
+    # Extraer grado del callback_data
+    grado = query.data.replace('grado_', '')
+    context.user_data['grado'] = grado
+
+    # Crear botones de grupo
+    grupos = ['A', 'B', 'C', 'D', 'E', 'F']
+    keyboard = []
+    for i in range(0, len(grupos), 3):
+        row = [InlineKeyboardButton(f"Grupo {g}", callback_data=f"grupo_{g}")
+               for g in grupos[i:i+3]]
+        keyboard.append(row)
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        f"✅ *Grado: {grado}*\n\n"
+        f"📝 **Paso 6 de 10**\n"
+        f"Selecciona el *grupo* del estudiante:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+    return GRUPO
+
+
+async def grupo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Maneja la selección de grupo e inicia preguntas dinámicas del estudiante"""
+    query = update.callback_query
+    await query.answer()
+
+    # Extraer grupo del callback_data
+    grupo = query.data.replace('grupo_', '')
+    context.user_data['grupo'] = grupo
+
+    # Cargar configuración de datos dinámicos
+    cct = context.user_data.get('clave_instituto')
+    datos_config = load_datos_estudiante()
+
+    # Verificar si hay campos adicionales para este instituto
+    if cct in datos_config and 'campos_estudiante' in datos_config[cct]:
+        campos = datos_config[cct]['campos_estudiante']
+        context.user_data['campos_estudiante_pendientes'] = campos.copy()
+        context.user_data['campo_estudiante_actual'] = 0
+
+        # Mostrar primera pregunta
+        return await mostrar_pregunta_estudiante(query, context)
+    else:
+        # No hay campos adicionales, pasar a datos del autorizado
+        await query.edit_message_text(
+            f"✅ *Grupo: {grupo}*\n\n"
+            f"📝 **Paso 7 de 10**\n"
+            f"Ahora, ingresa el *nombre del autorizado*:\n\n"
+            f"💡 *Ejemplo:* `Juan Carlos` o `María Elena`",
+            parse_mode='Markdown'
+        )
+        return NOMBRE_AUTORIZADO
+
+
+async def mostrar_pregunta_estudiante(query_or_update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Muestra la siguiente pregunta dinámica del estudiante"""
+    campos = context.user_data.get('campos_estudiante_pendientes', [])
+    idx = context.user_data.get('campo_estudiante_actual', 0)
+
+    if idx >= len(campos):
+        # Terminaron las preguntas del estudiante, pasar al autorizado
+        if isinstance(query_or_update, Update):
+            await query_or_update.message.reply_text(
+                "📝 **Paso 7 de 10**\n"
+                "Ahora, ingresa el *nombre del autorizado*:\n\n"
+                "💡 *Ejemplo:* `Juan Carlos` o `María Elena`",
+                parse_mode='Markdown'
+            )
+        else:
+            await query_or_update.edit_message_text(
+                "📝 **Paso 7 de 10**\n"
+                "Ahora, ingresa el *nombre del autorizado*:\n\n"
+                "💡 *Ejemplo:* `Juan Carlos` o `María Elena`",
+                parse_mode='Markdown'
+            )
+        return NOMBRE_AUTORIZADO
+
+    campo = campos[idx]
+    pregunta = campo.get('pregunta', 'Ingresa el dato')
+
+    if campo.get('tipo') == 'opcion_multiple':
+        # Crear botones para opciones múltiples
+        opciones = campo.get('opciones', [])
+        keyboard = []
+        for i in range(0, len(opciones), 2):
+            row = [InlineKeyboardButton(opt, callback_data=f"opt_est_{opt}")
+                   for opt in opciones[i:i+2]]
+            keyboard.append(row)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if isinstance(query_or_update, Update):
+            await query_or_update.message.reply_text(
+                pregunta,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        else:
+            await query_or_update.edit_message_text(
+                pregunta,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+    else:
+        # Pregunta de texto o foto
+        if isinstance(query_or_update, Update):
+            await query_or_update.message.reply_text(pregunta, parse_mode='Markdown')
+        else:
+            await query_or_update.edit_message_text(pregunta, parse_mode='Markdown')
+
+    return DATOS_DINAMICOS_ESTUDIANTE
+
+
+async def datos_dinamicos_estudiante_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Maneja las respuestas a preguntas dinámicas del estudiante"""
+    campos = context.user_data.get('campos_estudiante_pendientes', [])
+    idx = context.user_data.get('campo_estudiante_actual', 0)
+
+    if idx >= len(campos):
+        return await mostrar_pregunta_estudiante(update, context)
+
+    campo = campos[idx]
+    campo_nombre = campo.get('campo')
+
+    # Guardar respuesta
+    if update.message:
+        if update.message.photo:
+            # Es una foto
+            photo = update.message.photo[-1]  # La foto de mayor resolución
+            photo_file = await photo.get_file()
+            cct = context.user_data.get('clave_instituto')
+            nombre_completo = f"{context.user_data.get('nombre_estudiante')}_{context.user_data.get('apellidos_estudiante')}"
+            foto_path = await save_photo(photo_file, cct, 'alumnos', nombre_completo)
+            context.user_data['datos_estudiante_extra'][campo_nombre] = foto_path
+        else:
+            # Es texto
+            context.user_data['datos_estudiante_extra'][campo_nombre] = update.message.text.strip()
+    elif update.callback_query:
+        # Es una opción múltiple
+        query = update.callback_query
+        await query.answer()
+        valor = query.data.replace('opt_est_', '')
+        context.user_data['datos_estudiante_extra'][campo_nombre] = valor
+
+    # Avanzar al siguiente campo
+    context.user_data['campo_estudiante_actual'] = idx + 1
+    return await mostrar_pregunta_estudiante(update, context)
+
+
+async def nombre_autorizado_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Recibe el nombre del autorizado"""
+    context.user_data['nombre_autorizado'] = update.message.text.strip()
+
+    await update.message.reply_text(
+        "✅ *Nombre del autorizado guardado*\n\n"
+        "📝 **Paso 8 de 10**\n"
+        "Ahora, ingresa los *apellidos del autorizado*:\n\n"
+        "💡 *Ejemplo:* `García López` o `Martínez Rodríguez`",
+        parse_mode='Markdown'
+    )
+    return APELLIDOS_AUTORIZADO
+
+
+async def apellidos_autorizado_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Recibe los apellidos del autorizado e inicia preguntas dinámicas"""
+    context.user_data['apellidos_autorizado'] = update.message.text.strip()
+
+    # Cargar configuración de datos dinámicos
+    cct = context.user_data.get('clave_instituto')
+    datos_config = load_datos_estudiante()
+
+    # Verificar si hay campos adicionales para el autorizado
+    if cct in datos_config and 'campos_autorizado' in datos_config[cct]:
+        campos = datos_config[cct]['campos_autorizado']
+        context.user_data['campos_autorizado_pendientes'] = campos.copy()
+        context.user_data['campo_autorizado_actual'] = 0
+
+        # Mostrar primera pregunta
+        await update.message.reply_text(
+            "✅ *Apellidos del autorizado guardados*\n",
+            parse_mode='Markdown'
+        )
+        return await mostrar_pregunta_autorizado(update, context)
+    else:
+        # No hay campos adicionales, completar registro
+        return await completar_registro(update, context)
+
+
+async def mostrar_pregunta_autorizado(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Muestra la siguiente pregunta dinámica del autorizado"""
+    campos = context.user_data.get('campos_autorizado_pendientes', [])
+    idx = context.user_data.get('campo_autorizado_actual', 0)
+
+    if idx >= len(campos):
+        # Terminaron las preguntas, completar registro
+        return await completar_registro(update, context)
+
+    campo = campos[idx]
+    pregunta = campo.get('pregunta', 'Ingresa el dato')
+
+    await update.message.reply_text(pregunta, parse_mode='Markdown')
+    return DATOS_DINAMICOS_AUTORIZADO
+
+
+async def datos_dinamicos_autorizado_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Maneja las respuestas a preguntas dinámicas del autorizado"""
+    campos = context.user_data.get('campos_autorizado_pendientes', [])
+    idx = context.user_data.get('campo_autorizado_actual', 0)
+
+    if idx >= len(campos):
+        return await completar_registro(update, context)
+
+    campo = campos[idx]
+    campo_nombre = campo.get('campo')
+
+    # Guardar respuesta
+    if update.message.photo:
+        # Es una foto
+        photo = update.message.photo[-1]
+        photo_file = await photo.get_file()
+        cct = context.user_data.get('clave_instituto')
+        nombre_completo = f"{context.user_data.get('nombre_autorizado')}_{context.user_data.get('apellidos_autorizado')}"
+        foto_path = await save_photo(photo_file, cct, 'autorizados', nombre_completo)
+        context.user_data['datos_autorizado_extra'][campo_nombre] = foto_path
+    else:
+        # Es texto o teléfono
+        context.user_data['datos_autorizado_extra'][campo_nombre] = update.message.text.strip()
+
+    # Avanzar al siguiente campo
+    context.user_data['campo_autorizado_actual'] = idx + 1
+    return await mostrar_pregunta_autorizado(update, context)
+
+
+async def completar_registro(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Completa el registro guardando todos los datos en la base de datos"""
+    telegram_id = update.effective_user.id
+
+    # Guardar en la base de datos con todos los nuevos campos
+    success = db.add_student(
+        telegram_id=telegram_id,
+        clave_instituto=context.user_data['clave_instituto'],
+        nombre_estudiante=context.user_data['nombre_estudiante'],
+        apellidos_estudiante=context.user_data['apellidos_estudiante'],
+        grado=context.user_data.get('grado'),
+        grupo=context.user_data.get('grupo'),
+        nivel_escolar=context.user_data.get('nivel_escolar'),
+        datos_estudiante=context.user_data.get('datos_estudiante_extra', {}),
+        apellidos_autorizado=context.user_data['apellidos_autorizado'],
+        nombre_autorizado=context.user_data['nombre_autorizado'],
+        datos_autorizado=context.user_data.get('datos_autorizado_extra', {})
+    )
+
+    if success:
+        keyboard = [
+            [InlineKeyboardButton("📋 Ver mis datos", callback_data="view_students")],
+            [InlineKeyboardButton("➕ Agregar otro estudiante", callback_data="new_student_start")],
+            [InlineKeyboardButton("✏️ Editar datos", callback_data="edit_menu")],
+            [InlineKeyboardButton("🗑️ Eliminar registros", callback_data="delete_confirm")],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_text(
+            "✅ *¡Registro completado exitosamente!*\n\n"
+            "📚 Todos los datos han sido guardados en el sistema.\n"
+            f"🏫 Instituto: {context.user_data['clave_instituto']}\n"
+            f"👨‍🎓 Estudiante: {context.user_data['nombre_estudiante']} {context.user_data['apellidos_estudiante']}\n"
+            f"📊 Nivel: {context.user_data.get('nivel_escolar', '').capitalize()}, Grado {context.user_data.get('grado')}, Grupo {context.user_data.get('grupo')}",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            "❌ Hubo un error al guardar tus datos. Por favor, intenta nuevamente."
+        )
+
     # Limpiar datos temporales
     context.user_data.clear()
     return ConversationHandler.END
@@ -1094,10 +1568,22 @@ def main() -> None:
         ],
         states={
             CLAVE_INSTITUTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, clave_instituto)],
-            APELLIDOS_ESTUDIANTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, apellidos_estudiante)],
             NOMBRE_ESTUDIANTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, nombre_estudiante)],
-            APELLIDOS_AUTORIZADO: [MessageHandler(filters.TEXT & ~filters.COMMAND, apellidos_autorizado)],
-            NOMBRE_AUTORIZADO: [MessageHandler(filters.TEXT & ~filters.COMMAND, nombre_autorizado)],
+            APELLIDOS_ESTUDIANTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, apellidos_estudiante)],
+            NIVEL_ESCOLAR: [CallbackQueryHandler(nivel_escolar_callback, pattern="^nivel_")],
+            GRADO: [CallbackQueryHandler(grado_callback, pattern="^grado_")],
+            GRUPO: [CallbackQueryHandler(grupo_callback, pattern="^grupo_")],
+            DATOS_DINAMICOS_ESTUDIANTE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, datos_dinamicos_estudiante_handler),
+                MessageHandler(filters.PHOTO, datos_dinamicos_estudiante_handler),
+                CallbackQueryHandler(datos_dinamicos_estudiante_handler, pattern="^opt_est_")
+            ],
+            NOMBRE_AUTORIZADO: [MessageHandler(filters.TEXT & ~filters.COMMAND, nombre_autorizado_nuevo)],
+            APELLIDOS_AUTORIZADO: [MessageHandler(filters.TEXT & ~filters.COMMAND, apellidos_autorizado_nuevo)],
+            DATOS_DINAMICOS_AUTORIZADO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, datos_dinamicos_autorizado_handler),
+                MessageHandler(filters.PHOTO, datos_dinamicos_autorizado_handler)
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
