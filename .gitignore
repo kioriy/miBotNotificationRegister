@@ -1,0 +1,71 @@
+# Variables de entorno (contiene el token del bot)
+.env
+.env.local
+.env.*.local
+
+# Base de datos SQLite
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Archivos de respaldo
+*_backup_*.db
+
+# Archivos de bloqueo del bot
+*.lock
+
+# Entorno virtual de Python
+.venv/
+venv/
+env/
+ENV/
+botRegister/
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Logs
+*.log
+bot.log
+
+# Exportaciones
+exportaciones/
+exportaciones_autorizado/
+
+# Notebooks de Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Archivos temporales de sistema
+Thumbs.db
