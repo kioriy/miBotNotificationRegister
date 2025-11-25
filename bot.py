@@ -593,15 +593,11 @@ async def register_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data['datos_estudiante_extra'] = {}
     context.user_data['datos_autorizado_extra'] = {}
 
-    # Cargar CCTs válidas
-    cct_data = load_cct_data()
-    claves = [item['cct'] for item in cct_data.get('claves_validas', [])]
-
     await query.edit_message_text(
         "📝 *Proceso de Registro*\n\n"
         "📝 **Paso 1 de 10**\n"
         "Por favor, ingresa la *clave del instituto (CCT)*:\n\n"
-        f"💡 *Claves válidas:* {', '.join(claves)}\n"
+        "💡 *Ejemplo:* `14DPR2576Y`\n"
         "🔒 Si no conoces la clave consulta en dirección o administración del instituto.\n"
         "🔍 Usa `/miEstado` para ver tu progreso",
         parse_mode='Markdown'
@@ -614,13 +610,12 @@ async def clave_instituto(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Validar CCT
     if not validate_cct(cct):
-        cct_data = load_cct_data()
-        claves = [item['cct'] for item in cct_data.get('claves_validas', [])]
         await update.message.reply_text(
             f"❌ *CCT no válida*\n\n"
             f"La clave `{cct}` no está registrada en el sistema.\n\n"
-            f"💡 *Claves válidas:*\n" + "\n".join([f"  • {c}" for c in claves]) + "\n\n"
-            f"Por favor, ingresa una clave válida:",
+            f"🔒 Por favor, verifica la clave con la dirección o administración del instituto.\n"
+            f"💡 *Ejemplo de formato:* `14DPR2576Y`\n\n"
+            f"Intenta nuevamente:",
             parse_mode='Markdown'
         )
         return CLAVE_INSTITUTO
@@ -678,80 +673,6 @@ async def apellidos_estudiante(update: Update, context: ContextTypes.DEFAULT_TYP
         parse_mode='Markdown'
     )
     return NIVEL_ESCOLAR
-
-
-async def nombre_estudiante(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Recibe el nombre del estudiante"""
-    context.user_data['nombre_estudiante'] = update.message.text
-    # Mantener el flag de registro en progreso
-    context.user_data['registration_in_progress'] = True
-    
-    await update.message.reply_text(
-        "✅ *Nombre del estudiante guardado*\n\n"
-        "📝 **Paso 4 de 5**\n"
-        "Ahora, ingresa los *apellidos del autorizado*:\n\n"
-        "💡 *Ejemplo:* `García López` o `Martínez Rodríguez`\n"
-        "🔍 Usa `/miEstado` para ver tu progreso",
-        parse_mode='Markdown'
-    )
-    return APELLIDOS_AUTORIZADO
-
-
-async def apellidos_autorizado(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Recibe los apellidos del autorizado"""
-    context.user_data['apellidos_autorizado'] = update.message.text
-    # Mantener el flag de registro en progreso
-    context.user_data['registration_in_progress'] = True
-    
-    await update.message.reply_text(
-        "✅ *Apellidos del autorizado guardados*\n\n"
-        "📝 **Paso 5 de 5** (Último paso)\n"
-        "Por último, ingresa el *nombre del autorizado*:\n\n"
-        "💡 *Ejemplo:* `Juan Carlos` o `María Elena`\n"
-        "🔍 Usa `/miEstado` para ver tu progreso",
-        parse_mode='Markdown'
-    )
-    return NOMBRE_AUTORIZADO
-
-
-async def nombre_autorizado(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Recibe el nombre del autorizado y completa el registro"""
-    context.user_data['nombre_autorizado'] = update.message.text
-    telegram_id = update.effective_user.id
-    
-    # Guardar en la base de datos
-    success = db.add_student(
-        telegram_id=telegram_id,
-        clave_instituto=context.user_data['clave_instituto'],
-        apellidos_estudiante=context.user_data['apellidos_estudiante'],
-        nombre_estudiante=context.user_data['nombre_estudiante'],
-        apellidos_autorizado=context.user_data['apellidos_autorizado'],
-        nombre_autorizado=context.user_data['nombre_autorizado']
-    )
-    
-    if success:
-        keyboard = [
-        [InlineKeyboardButton("📋 Ver mis datos", callback_data="view_students")],
-        [InlineKeyboardButton("➕ Agregar otro estudiante", callback_data="new_student_start")],
-        [InlineKeyboardButton("✏️ Editar datos", callback_data="edit_menu")],
-        [InlineKeyboardButton("🗑️ Eliminar registros", callback_data="delete_confirm")],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            "✅ *¡Registro completado exitosamente!*\n\n"
-            "Tus datos han sido guardados en el sistema.",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-    else:
-        await update.message.reply_text(
-            "❌ Hubo un error al guardar tus datos. Por favor, intenta nuevamente."
-        )
-    
-    # Limpiar datos temporales
-    context.user_data.clear()
-    return ConversationHandler.END
 
 
 # ============================================================================
