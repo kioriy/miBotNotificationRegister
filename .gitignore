@@ -56,16 +56,60 @@ exportaciones/
 exportaciones_autorizado/
 
 # Notebooks de Jupyter
-.ipynb_checkpoints
-*.ipynb
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
 
-# IDEs
+# Testing y Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+nosetests.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Profiling
+*.prof
+*.lprof
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# IDEs y Editores
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
+.spyderproject
+.spyproject
+.ropeproject
+*.sublime-project
+*.sublime-workspace
+
+# Python Version Managers
+.python-version
+.pyenv
+
+# Package Managers
+Pipfile.lock
+poetry.lock
+pdm.lock
+uv.lock
 
 # Archivos temporales de sistema
+.DS_Store
 Thumbs.db
+*.tmp
+*.temp
